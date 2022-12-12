@@ -14,13 +14,13 @@ const readlineSync = require('readline-sync');
 
 async function movieDBProgramme() {
     let programmeStillRunning = true;
-    let actionSelection = readlineSync.question('Welcome to search-movies-cli!/n[1] Search/n[2] See Favourites/n[3] Quit/nChoose an action! [1, 2, 3]: ');
+    let actionSelection = readlineSync.question(`Welcome to search-movies-cli!/n[1] Search/n[2] See Favourites/n[3] Quit/nChoose an action! [1, 2, 3]: `);
 
     while(programmeStillRunning){
-        if(actionSelection===1){
-            searchForMovieInDB()
+        if(actionSelection==='1'){
+            await searchForMovieInDB()
         } else if (actionSelection===2){
-            showFavourites()
+            await showFavourites()
         } else if(actionSelection===3){
             programmeStillRunning=false
         } else{
@@ -30,28 +30,47 @@ async function movieDBProgramme() {
 }
 
 async function showFavourites() {
-    
+    const client = new Client({database:'omdb'});
+    await client.connect();
+    const res = await client.query('SELECT * FROM favourites');
+    console.log('Here are your saved favourites!');
+    console.table(res.rows)
 }
 
  
 async function searchForMovieInDB(){
     
-    const text = 
-    `SELECT name, date, runtime, revenue, vote_average, votes_count 
+    const searchText = 
+    `SELECT id, name, date_part('year', date) AS year, runtime, revenue, vote_average, votes_count 
     FROM movies
     WHERE UPPER(name) LIKE UPPER($1)
     AND kind = 'movie' 
     ORDER BY name 
-    DESC LIMIT 10`
+    DESC LIMIT 10`;
+
+    const favouriteText = 
+    `INSERT INTO favourites (movie_id, name, year, runtime)
+    VALUES ($1, `
 
     let movieSearch = readlineSync.question('Search for a movie! ');
-    const value = [`%${movieSearch}%`]
+    const searchValue = [`%${movieSearch}%`]
     const client = new Client({ database: 'omdb' });
     await client.connect();
-    const res = await client.query(text, value);
+    const res = await client.query(searchText, searchValue);
+    console.log(`Search term: ${movieSearch}`)
     console.table(res.rows);
+    for(let i=0; i<res.rows.length; i++){
+        console.log(`[${i+1}] ${res.rows[i].name}`)
+    }
+    console.log(`[0] CANCEL`)
+    let favSelection = res.rows[readlineSync.question('Choose a movie row number to favourite: ') -1]
+    console.log(`Saving favourite movie: ${favSelection.name}`)
+    const insertQuery = `INSERT INTO favourites (movie_id, name, year, runtime) VALUES (${favSelection.id}, ${favSelection.name}, ${favSelection.year}, ${favSelection.runtime})`
+    console.log(insertQuery);
+    await client.query(insertQuery)
     await client.end();
     }
 
 
-searchForMovieInDB()
+//searchForMovieInDB()
+movieDBProgramme()
